@@ -1,7 +1,7 @@
 ﻿# Microsoft Deployment Toolkit 8456 Automatic Setup
 # Author: Sam Tucker (https://github.com/pwshMgr)
-# Version: 3.3.2
-# Release date: 27/01/2019
+# Version: 3.3.3
+# Release date: 23/02/2019
 # Tested on Windows 10 1607, Windows Server 2016 & 2019
 
 #Requires -RunAsAdministrator
@@ -183,11 +183,21 @@ $params = @{
 }
 sc @params -Confirm:$False
 
-write "Disabling x86 Support"
-$DeploymentShareSettings = "$DSDrive\DeploymentShare\Control\Settings.xml"
-$xmlDoc = [XML](Get-Content $DeploymentShareSettings)
-$xmldoc.Settings.SupportX86 = "False"
-$xmlDoc.Save($DeploymentShareSettings)
+#Edit CustomSettings.ini
+$params = @{
+    Path  = "$DSDrive\DeploymentShare\Control\CustomSettings.ini"
+    Value = $CustomSettingsIni
+    Force = $True
+}
+sc @params -Confirm:$False
+
+if ($DisableX86Support) {
+    write "Disabling x86 Support"
+    $DeploymentShareSettings = "$DSDrive\DeploymentShare\Control\Settings.xml"
+    $xmlDoc = [XML](Get-Content $DeploymentShareSettings)
+    $xmldoc.Settings.SupportX86 = "False"
+    $xmlDoc.Save($DeploymentShareSettings)
+}
 
 #Create LiteTouch Boot WIM & ISO
 write "Creating LiteTouch Boot Media"
