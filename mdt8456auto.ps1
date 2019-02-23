@@ -1,4 +1,4 @@
-﻿# Microsoft Deployment Toolkit 8456 Automatic Setup
+﻿# Microsoft Deployment Toolkit Automatic Setup
 # Author: Sam Tucker (https://github.com/pwshMgr)
 # Version: 3.3.3
 # Release date: 23/02/2019
@@ -25,7 +25,7 @@ param (
 $ErrorActionPreference = "Stop"
 $DSDrive = $DSDrive.TrimEnd("\")
 
-#Import Configuration JSON
+#Import configuration.ps1
 $Configuration = Test-Path "$PSScriptRoot\configuration.ps1"
 if (!$Configuration) {
     Write-Error "configuration.ps1 not found"
@@ -140,23 +140,23 @@ $OperatingSystems = Get-ChildItem -Path "DS001:\Operating Systems"
 
 if ($OperatingSystems) {
     [int]$counter = 0
-    foreach ($OS in $OperatingSystems){
-    $Counter++
-    $WimName = Split-Path -Path $OS.Source -Leaf
-    $params = @{
-        Path                = "DS001:\Task Sequences"
-        Name                = "$($OS.Description) in $WimName"
-        Template            = "Client.xml"
-        Comments            = ""
-        ID                  = $Counter
-        Version             = "1.0"
-        OperatingSystemPath = "DS001:\Operating Systems\$($OS.Name)"
-        FullName            = "fullname"
-        OrgName             = "org"
-        HomePage            = "about:blank"
-        Verbose             = $true
-    }
-    Import-MDTTaskSequence @params
+    foreach ($OS in $OperatingSystems) {
+        $Counter++
+        $WimName = Split-Path -Path $OS.Source -Leaf
+        $params = @{
+            Path                = "DS001:\Task Sequences"
+            Name                = "$($OS.Description) in $WimName"
+            Template            = "Client.xml"
+            Comments            = ""
+            ID                  = $Counter
+            Version             = "1.0"
+            OperatingSystemPath = "DS001:\Operating Systems\$($OS.Name)"
+            FullName            = "fullname"
+            OrgName             = "org"
+            HomePage            = "about:blank"
+            Verbose             = $true
+        }
+        Import-MDTTaskSequence @params
     }
 }
 
