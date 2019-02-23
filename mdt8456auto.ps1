@@ -1,6 +1,6 @@
 ﻿# Microsoft Deployment Toolkit 8456 Automatic Setup
 # Author: Sam Tucker (https://github.com/pwshMgr)
-# Version: 3.3.1
+# Version: 3.3.2
 # Release date: 27/01/2019
 # Tested on Windows 10 1607, Windows Server 2016 & 2019
 
@@ -25,34 +25,40 @@ param (
 $ErrorActionPreference = "Stop"
 $DSDrive = $DSDrive.TrimEnd("\")
 
-write "Downloading MDT 8456"
-$params = @{
-    Source      = "https://download.microsoft.com/download"+
-    "/3/3/9/339BE62D-B4B8-4956-B58D-73C4685FC492/MicrosoftDeploymentToolkit_x64.msi"
+#Import Configuration JSON
+$Configuration = Test-Path "$PSScriptRoot\configuration.ps1"
+if (!$Configuration) {
+    Write-Error "configuration.ps1 not found"
+}
 
+Try {
+    . "$PSScriptRoot\configuration.ps1"
+} Catch {
+    Write-Error "Check configuration.ps1 for syntax errors"
+}
+
+write "Downloading MDT $MDTVersion"
+$params = @{
+    Source      = $MDTUrl
     Destination = "$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"
 }
 Start-BitsTransfer @params
 
-write "Downloading ADK 1809"
+write "Downloading ADK $ADKVersion"
 $params = @{
-    Source      = "http://download.microsoft.com/download"+
-    "/0/1/C/01CC78AA-B53B-4884-B7EA-74F2878AA79F/adk/adksetup.exe"
-
+    Source      = $ADKUrl
     Destination = "$PSScriptRoot\adksetup.exe"
 }
 Start-BitsTransfer @params
 
-write "Downloading ADK 1809 WinPE Addon"
+write "Downloading ADK $ADKVersion WinPE Addon"
 $params = @{
-    Source      = "http://download.microsoft.com/download"+
-    "/D/7/E/D7E22261-D0B3-4ED6-8151-5E002C7F823D/adkwinpeaddons/adkwinpesetup.exe"
-
+    Source      = $ADKWinPEUrl
     Destination = "$PSScriptRoot\adkwinpesetup.exe"
 }
 Start-BitsTransfer @params
 
-write "Installing MDT 8456"
+write "Installing MDT $MDTVersion"
 $params = @{
     Wait         = $True
     FilePath     = "msiexec"
@@ -60,7 +66,7 @@ $params = @{
 }
 start @params
 
-write "Installing ADK 1809"
+write "Installing ADK $ADKVersion"
 $params = @{
     Wait         = $True
     FilePath     = "$PSScriptRoot\adksetup.exe"
@@ -68,7 +74,7 @@ $params = @{
 }
 start @params
 
-write "Installing ADK 1809 WinPE Addon"
+write "Installing ADK $ADKVersion WinPE Addon"
 $params = @{
     Wait         = $True
     FilePath     = "$PSScriptRoot\adkwinpesetup.exe"
