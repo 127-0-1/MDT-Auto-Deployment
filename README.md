@@ -15,8 +15,8 @@ Tested on Windows 10 1607, Server 2016 & 2019
 powershell -ExecutionPolicy Bypass -File mdt8456auto.ps1 -IncludeApplications -InstallWDS
 ```
 You will be asked to enter the following information:
-- ServiceAccountPassword – This is the password for the local service account that gets created when the script runs
-- DeploymentShareDrive – This is to select which drive you want the deployment share to exist on, i.e. c:\
+- ServiceAccountPassword – password for the local service account that gets created when the script runs
+- DeploymentShareDrive – select which drive you want the deployment share to exist on, i.e. c:\
 
 ## Tasks the script completes
 1) Download & install MDT (8456) & ADK (1809)
