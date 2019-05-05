@@ -72,7 +72,7 @@ Catch {
 if ($IncludeApplications) {
     $Applications = Test-Path "$PSScriptRoot\applications.json"
     if (!$Applications) {
-        Write-Error "-IncludeApplcations switch specified, but no application.json file found in script directory."
+        Write-Error "-IncludeApplications switch specified, but no application.json file found in script directory."
     }
     else {
         Try {
