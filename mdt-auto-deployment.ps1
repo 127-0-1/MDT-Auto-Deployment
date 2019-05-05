@@ -1,7 +1,7 @@
 ﻿# Microsoft Deployment Toolkit Automatic Setup
 # Author: Sam Tucker (https://github.com/pwshMgr)
-# Version: 3.3.3
-# Release date: 23/02/2019
+# Version: 3.3.4
+# Release date: 05/05/2019
 # Tested on Windows 10 1607, Windows Server 2016 & 2019
 
 #Requires -RunAsAdministrator
@@ -12,7 +12,7 @@ param (
     [string] $SvcAccountPassword,
 
     [Parameter(Mandatory = $true)]
-    [ValidateScript( {Test-Path $_})]
+    [ValidateScript( { Test-Path $_ })]
     [string]$DSDrive,
 
     [Parameter(Mandatory = $false)]
@@ -25,16 +25,63 @@ param (
 $ErrorActionPreference = "Stop"
 $DSDrive = $DSDrive.TrimEnd("\")
 
+# File download function with retries
+Function Download-File {
+    param (
+        [Parameter(Mandatory = $True)]
+        [string]$Source,
+        [Parameter(Mandatory = $True)]
+        [string]$Destination
+    )
+    [bool]$StopLoop = $False
+    [int]$RetryCount = "0"
+    Do {
+        Try {
+            Start-BitsTransfer -Source $Source -Destination $Destination
+            $StopLoop = $True
+        }
+        Catch {
+            If ($RetryCount -gt 4) {
+                throw "Could not download $Source after 5 tries - error: " + $_
+                $StopLoop = $True
+            }
+            Else {
+                Write-Host "Failed to download file - retrying"
+                Start-Sleep -Seconds 5
+                $RetryCount = $RetryCount + 1
+            }
+        }
+    }
+    While ($StopLoop -eq $False)
+}
+
 #Import configuration.ps1
 $Configuration = Test-Path "$PSScriptRoot\configuration.ps1"
 if (!$Configuration) {
-    Write-Error "configuration.ps1 not found"
+    Write-Error "configuration.ps1 not found in script directory"
 }
 
 Try {
     . "$PSScriptRoot\configuration.ps1"
-} Catch {
+}
+Catch {
     Write-Error "Check configuration.ps1 for syntax errors"
+}
+
+#Import applications.json
+if ($IncludeApplications) {
+    $Applications = Test-Path "$PSScriptRoot\applications.json"
+    if (!$Applications) {
+        Write-Error "-IncludeApplcations switch specified, but no application.json file found in script directory."
+    }
+    else {
+        Try {
+            $Applist = gc "$PSScriptRoot\applications.json" | ConvertFrom-Json
+        }
+        Catch {
+            Write-Error "Failed to load applications.json. Please check syntax and try again"
+        }
+    }
 }
 
 write "Downloading MDT $MDTVersion"
@@ -42,27 +89,28 @@ $params = @{
     Source      = $MDTUrl
     Destination = "$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"
 }
-Start-BitsTransfer @params
+Download-File @params
 
 write "Downloading ADK $ADKVersion"
 $params = @{
     Source      = $ADKUrl
     Destination = "$PSScriptRoot\adksetup.exe"
 }
-Start-BitsTransfer @params
+Download-File @params
 
 write "Downloading ADK $ADKVersion WinPE Addon"
 $params = @{
     Source      = $ADKWinPEUrl
     Destination = "$PSScriptRoot\adkwinpesetup.exe"
 }
-Start-BitsTransfer @params
+Download-File @params
 
 write "Installing MDT $MDTVersion"
 $params = @{
     Wait         = $True
     FilePath     = "msiexec"
-    ArgumentList = "/i ""$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"" /qn"
+    ArgumentList = "/i ""$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"" /qn " + 
+    "/l*v ""$PSScriptRoot\mdt_install.log"""
 }
 start @params
 
@@ -70,7 +118,8 @@ write "Installing ADK $ADKVersion"
 $params = @{
     Wait         = $True
     FilePath     = "$PSScriptRoot\adksetup.exe"
-    ArgumentList = "/quiet /features OptionId.DeploymentTools"
+    ArgumentList = "/quiet /features OptionId.DeploymentTools " + 
+    "/log ""$PSScriptRoot\adk.log"""
 }
 start @params
 
@@ -78,13 +127,14 @@ write "Installing ADK $ADKVersion WinPE Addon"
 $params = @{
     Wait         = $True
     FilePath     = "$PSScriptRoot\adkwinpesetup.exe"
-    ArgumentList = "/quiet /features OptionId.WindowsPreinstallationEnvironment"
+    ArgumentList = "/quiet /features OptionId.WindowsPreinstallationEnvironment " +
+    "/log ""$PSScriptRoot\adk_winpe.log"""
 }
 start @params
 
 write "Importing MDT Module"
-$ModulePath = "$env:ProgramFiles\Microsoft Deployment Toolkit"+
-              "\bin\MicrosoftDeploymentToolkit.psd1"
+$ModulePath = "$env:ProgramFiles\Microsoft Deployment Toolkit" +
+"\bin\MicrosoftDeploymentToolkit.psd1"
 Import-Module $ModulePath
 
 write "Creating local Service Account for DeploymentShare"
@@ -122,15 +172,15 @@ if (!$Wims) {
 }
 
 if ($Wims) {
-    foreach($Wim in $Wims){
-    $WimName = (Split-Path $Wim -Leaf).TrimEnd(".wim")
-    write "$WimName found - will import"
-    $params = @{
-        Path              = "DS001:\Operating Systems"
-        SourceFile        = $Wim
-        DestinationFolder = $WimName
-    }
-    $OSData = Import-MDTOperatingSystem @params -Verbose
+    foreach ($Wim in $Wims) {
+        $WimName = (Split-Path $Wim -Leaf).TrimEnd(".wim")
+        write "$WimName found - will import"
+        $params = @{
+            Path              = "DS001:\Operating Systems"
+            SourceFile        = $Wim
+            DestinationFolder = $WimName
+        }
+        $OSData = Import-MDTOperatingSystem @params -Verbose
     }
 }
 
@@ -208,7 +258,7 @@ if ($IncludeApplications) {
     write "Downloading Office Deployment Toolkit"
     New-Item -ItemType Directory -Path "$PSScriptRoot\odt"
     $params = @{
-        Source      = "https://download.microsoft.com/download"+
+        Source      = "https://download.microsoft.com/download" +
         "/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_11306-33602.exe"
         Destination = "$PSScriptRoot\odt\officedeploymenttool.exe"
     }
@@ -253,7 +303,6 @@ if ($IncludeApplications) {
 }
 
 if ($IncludeApplications) {
-    $Applist = gc "$PSScriptRoot\applications.json" | ConvertFrom-Json
     foreach ($Application in $AppList) {
         New-Item -Path "$PSScriptRoot\mdt_apps\$($application.name)" -ItemType Directory -Force
         $params = @{
@@ -292,7 +341,7 @@ If ($InstallWDS) {
         if ($WDSCheck) {
             write "WDS Role Available - Installing"
             Add-WindowsFeature -Name WDS -IncludeAllSubFeature -IncludeManagementTools
-            $WDSInit   = wdsutil /initialize-server /remInst:"$DSDrive\remInstall" /standalone
+            $WDSInit = wdsutil /initialize-server /remInst:"$DSDrive\remInstall" /standalone
             $WDSConfig = wdsutil /Set-Server /AnswerClients:All
             $params = @{
                 Path         = "$DSDrive\DeploymentShare\Boot\LiteTouchPE_x64.wim"
