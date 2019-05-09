@@ -1,7 +1,7 @@
 ﻿# Microsoft Deployment Toolkit Automatic Setup
 # Author: Sam Tucker (https://github.com/pwshMgr)
 # Version: 3.4.0
-# Release date: 08/05/2019
+# Release date: 09/05/2019
 # Tested on Windows 10 1607, Windows Server 2016 & 2019
 
 #Requires -RunAsAdministrator
@@ -26,19 +26,19 @@ $DSDrive = $DSDrive.TrimEnd("\")
 
 $Logfile = "$PSScriptRoot\mdt-auto-deployment.log"
 
-Function Write-Log {
+function Write-Log {
     param (
         [Parameter(Mandatory = $True)]
         [string]$Log,
         [Parameter(Mandatory = $True)]
-        [ValidateSet("INFO", "WARN", "ERROR")]
+        [ValidateSet("Info", "Warn", "Error")]
         [string]$Level
     )
     $Date = Get-Date
-    if ($Level -eq "INFO") {
+    if ($Level -eq "Info") {
         Write-Host -ForegroundColor Green "$Date ($Level): $Log"
     } 
-    elseif ($Level -eq "WARN") {
+    elseif ($Level -eq "Warn") {
         Write-Host -ForegroundColor Yellow "$Date ($Level): $Log"
     } 
     else {
@@ -47,12 +47,12 @@ Function Write-Log {
     Add-content $Logfile -Value "$Date ($Level): $Log"
 }
 
-Function Exit-Script {
+function Exit-Script {
     Pause
     Exit
 }
 
-Function Download-File {
+function Download-File {
     param (
         [Parameter(Mandatory = $True)]
         [string]$Source,
@@ -61,127 +61,127 @@ Function Download-File {
     )
     [bool]$StopLoop = $False
     [int]$RetryCount = "0"
-    Do {
-        Try {
+    do {
+        try {
             Start-BitsTransfer -Source $Source -Destination $Destination -ErrorAction Stop
             $StopLoop = $True
         }
-        Catch {
-            If ($RetryCount -gt 4) {
+        catch {
+            if ($RetryCount -gt 4) {
                 throw "Could not download $Source after 5 tries - error: " + $_
                 $StopLoop = $True
             }
-            Else {
-                Write-Log -Level WARN -Log "Failed to download file from $Source - retrying"
+            else {
+                Write-Log -Level Warn -Log "Failed to download file from $Source - retrying"
                 Start-Sleep -Seconds 5
                 $RetryCount = $RetryCount + 1
             }
         }
     }
-    While ($StopLoop -eq $False)
+    while ($StopLoop -eq $False)
 }
 
-Write-Log -Level INFO -Log "Starting Script"
+Write-Log -Level Info -Log "Starting Script"
 
-Write-Log -Level INFO -Log "Checking if MDT is already installed"
-$MDTInstalled = gwmi -Query "SELECT * FROM Win32_Product Where Name Like '%Microsoft Deployment Toolkit%'"
+Write-Log -Level Info -Log "Checking if MDT is already installed"
+$MDTInstalled = Get-WmiObject -Query "SELECT * FROM Win32_Product Where Name Like '%Microsoft Deployment Toolkit%'"
 if ($MDTInstalled) {
-    Write-Log -Level ERROR -Log "MDT is already installed. This script is for a clean Windows build. exiting"
+    Write-Log -Level Error -Log "MDT is already installed. This script is for a clean Windows build. exiting"
     Exit-Script
 }
 
 # TODO: Check if ADK is already installed, if so, exit
-Write-Log -Level INFO -Log "Checking if ADK is already installed"
-$ADKInstalled = gwmi -Query "SELECT * FROM Win32_Product Where Name Like '%Windows Deployment Tools%'"
+Write-Log -Level Info -Log "Checking if ADK is already installed"
+$ADKInstalled = Get-WmiObject -Query "SELECT * FROM Win32_Product Where Name Like '%Windows Deployment Tools%'"
 if ($ADKInstalled) {
-    Write-Log -Level ERROR -Log "ADK is already installed. This script is for a clean Windows build. exiting"
+    Write-Log -Level Error -Log "ADK is already installed. This script is for a clean Windows build. exiting"
     Exit-Script
 }
 
 #Import configuration.ps1
-Write-Log -Level INFO -Log "Importing configuration.ps1"
+Write-Log -Level Info -Log "Importing configuration.ps1"
 $Configuration = Test-Path "$PSScriptRoot\configuration.ps1"
 if (!$Configuration) {
-    Write-Log -Level ERROR -Log "configuration.ps1 not found in script directory"
+    Write-Log -Level Error -Log "configuration.ps1 not found in script directory"
     Exit-Script
 }
 
-Try {
+try {
     . "$PSScriptRoot\configuration.ps1"
 }
-Catch {
-    Write-Log -Level ERROR -Log "Check configuration.ps1 for syntax errors"
+catch {
+    Write-Log -Level Error -Log "Check configuration.ps1 for syntax errors"
     Exit-Script
 }
 
 #Import applications.json and download Office Deployment Tool
 if ($IncludeApplications) {
-    Write-Log -Level INFO -Log "Importing applications.json"
+    Write-Log -Level Info -Log "Importing applications.json"
     $Applications = Test-Path "$PSScriptRoot\applications.json"
     if (!$Applications) {
-        Write-Log -Level ERROR -Log "No applications.json file found in script directory"
+        Write-Log -Level Error -Log "No applications.json file found in script directory"
         Exit-Script
     }
     else {
-        Try {
+        try {
             $Applist = gc "$PSScriptRoot\applications.json" | ConvertFrom-Json
         }
-        Catch {
-            Write-Log -Level ERROR -Log "Failed to load applications.json. Please check syntax and try again"
+        catch {
+            Write-Log -Level Error -Log "Failed to load applications.json. Please check syntax and try again"
             Exit-Script
         }
     }
     New-Item -ItemType Directory -Path "$PSScriptRoot\odt" -Force | Out-Null
-    Try {
-        Write-Log -Level INFO -Log "Downloading Office Deployment Toolkit"
+    try {
+        Write-Log -Level Info -Log "Downloading Office Deployment Toolkit"
         Download-File -Source $OfficeDeploymentToolUrl -Destination "$PSScriptRoot\odt\officedeploymenttool.exe"
     } 
-    Catch {
-        Write-Log -Level ERROR -Log "Failed to download Office Deployment Toolkit. ($($_))"
+    catch {
+        Write-Log -Level Error -Log "Failed to download Office Deployment Toolkit. ($($_))"
         Exit-Script
     }
 }
 
-Write-Log -Level INFO -Log "Downloading MDT ($MDTVersion)"
+Write-Log -Level Info -Log "Downloading MDT $MDTVersion"
 $params = @{
     Source      = $MDTUrl
     Destination = "$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"
 }
-Try {
+try {
     Download-File @params -ErrorAction Stop
 }
-Catch {
-    Write-Log -Level ERROR -Log "Failed to download MDT. ($($_))"
+catch {
+    Write-Log -Level Error -Log "Failed to download MDT. ($($_))"
     Exit-Script
 }
 
-Write-Log -Level INFO -Log "Downloading ADK $ADKVersion"
+Write-Log -Level Info -Log "Downloading ADK $ADKVersion"
 $params = @{
     Source      = $ADKUrl
     Destination = "$PSScriptRoot\adksetup.exe"
 }
-Try {
+try {
     Download-File @params -ErrorAction Stop
 }
-Catch {
-    Write-Log -Level ERROR -Log "Failed to download ADK. ($($_))"
+catch {
+    Write-Log -Level Error -Log "Failed to download ADK. ($($_))"
     Exit-Script
 }
 
-Write-Log -Level INFO -Log "Downloading ADK $ADKVersion WinPE Addon"
+Write-Log -Level Info -Log "Downloading ADK $ADKVersion WinPE Addon"
 $params = @{
     Source      = $ADKWinPEUrl
     Destination = "$PSScriptRoot\adkwinpesetup.exe"
 }
-Try {
+try {
     Download-File @params -ErrorAction Stop
 }
-Catch {
-    Write-Log -Level ERROR -Log "Failed to download ADK WinPE Addon. ($($_))"
+catch {
+    Write-Log -Level Error -Log "Failed to download ADK WinPE Addon. ($($_))"
     Exit-Script
 }
 
-Write-Log -Level INFO -Log "Installing MDT $MDTVersion"
+Write-Log -Level Info -Log "Installing MDT $MDTVersion"
 $params = @{
     Wait         = $True
     PassThru     = $True
@@ -190,14 +190,14 @@ $params = @{
     ArgumentList = "/i ""$PSScriptRoot\MicrosoftDeploymentToolkit_x64.msi"" /qn " + 
     "/l*v ""$PSScriptRoot\mdt_install.log"""
 }
-$Return = start @params
+$Return = Start-Process @params
 if (@(0, 3010, 1641) -notcontains $Return.ExitCode) { 
-    Write-Log -Level ERROR -Log "Failed to install MDT. Exit code: $($Return.ExitCode)"
+    Write-Log -Level Error -Log "Failed to install MDT. Exit code: $($Return.ExitCode)"
     Exit-Script
 }
 $Return = $null
 
-Write-Log -Level INFO -Log "Installing ADK $ADKVersion"
+Write-Log -Level Info -Log "Installing ADK $ADKVersion"
 $params = @{
     Wait         = $True
     PassThru     = $True
@@ -206,14 +206,14 @@ $params = @{
     ArgumentList = "/quiet /features OptionId.DeploymentTools " + 
     "/log ""$PSScriptRoot\adk.log"""
 }
-$Return = start @params
+$Return = Start-Process @params
 if ($Return.ExitCode -ne 0) {
-    Write-Log -Level ERROR -Log "Failed to install ADK. Exit code: $($Return.ExitCode)"
+    Write-Log -Level Error -Log "Failed to install ADK. Exit code: $($Return.ExitCode)"
     Exit-Script
 }
 $Return = $null
 
-Write-Log -Level INFO -Log "Installing ADK $ADKVersion WinPE Addon"
+Write-Log -Level Info -Log "Installing ADK $ADKVersion WinPE Addon"
 $params = @{
     Wait         = $True
     PassThru     = $True
@@ -222,19 +222,19 @@ $params = @{
     ArgumentList = "/quiet /features OptionId.WindowsPreinstallationEnvironment " +
     "/log ""$PSScriptRoot\adk_winpe.log"""
 }
-$Return = start @params
+$Return = Start-Process @params
 if ($Return.ExitCode -ne 0) {
-    Write-Log -Level ERROR -Log "Failed to install ADK WinPE Addon. Exit code: $($Return.ExitCode)"
+    Write-Log -Level Error -Log "Failed to install ADK WinPE Addon. Exit code: $($Return.ExitCode)"
     Exit-Script
 }
 $Return = $null
 
-Write-Log -Level INFO -Log "Importing MDT Module"
+Write-Log -Level Info -Log "Importing MDT Module"
 $ModulePath = "$env:ProgramFiles\Microsoft Deployment Toolkit" +
 "\bin\MicrosoftDeploymentToolkit.psd1"
 Import-Module $ModulePath
 
-Write-Log -Level INFO -Log "Creating local Service Account for DeploymentShare"
+Write-Log -Level Info -Log "Creating local Service Account for DeploymentShare"
 $params = @{
     Name                 = "svc_mdt"      
     Password             = (ConvertTo-SecureString $SvcAccountPassword -AsPlainText -Force)
@@ -243,7 +243,7 @@ $params = @{
 }
 New-LocalUser @params
 
-Write-Log -Level INFO -Log "Creating Deployment Share Directory"
+Write-Log -Level Info -Log "Creating Deployment Share Directory"
 New-Item -Path "$DSDrive\DeploymentShare" -ItemType Directory
 
 $params = @{
@@ -262,27 +262,25 @@ $params = @{
 }
 New-PSDrive @params | Add-MDTPersistentDrive 
 
-Write-Log -Level INFO -Log "Checking for wim files to import"
+Write-Log -Level Info -Log "Checking for wim files to import"
 $Wims = Get-ChildItem $PSScriptRoot -Filter "*.wim" | Select -ExpandProperty FullName
-if (!$Wims) {
-    write "No wim files found"
-}
-
 if ($Wims) {
     foreach ($Wim in $Wims) {
         $WimName = (Split-Path $Wim -Leaf).TrimEnd(".wim")
-        Write-Log -Level INFO -Log "$WimName found - will import"
+        Write-Log -Level Info -Log "$WimName found - will import"
         $params = @{
             Path              = "DS001:\Operating Systems"
             SourceFile        = $Wim
             DestinationFolder = $WimName
         }
-        $OSData = Import-MDTOperatingSystem @params -Verbose
+        $OSData = Import-MDTOperatingSystem @params | Out-Null
     }
+} else {
+    Write-Log -Level Info -Log "No WIM files found to import"
 }
 
 #Create Task Sequence for each Operating System
-Write-Log -Level INFO -Log "Creating Task Sequence for each imported Operating System"
+Write-Log -Level Info -Log "Creating Task Sequence for each imported Operating System"
 $OperatingSystems = Get-ChildItem -Path "DS001:\Operating Systems"
 
 if ($OperatingSystems) {
@@ -301,9 +299,8 @@ if ($OperatingSystems) {
             FullName            = "fullname"
             OrgName             = "org"
             HomePage            = "about:blank"
-            Verbose             = $true
         }
-        Import-MDTTaskSequence @params
+        Import-MDTTaskSequence @params | Out-Null
     }
 }
 
@@ -314,7 +311,7 @@ Priority=Default
 [Default]
 DeployRoot=\\$env:COMPUTERNAME\DeploymentShare$
 SkipBDDWelcome=YES
-UserDomain=$env:COMPUTERNAME
+Userdomain=$env:COMPUTERNAME
 UserID=svc_mdt
 UserPassword=$SvcAccountPassword
 "@
@@ -324,7 +321,7 @@ $params = @{
     Value = $BootstrapIni
     Force = $True
 }
-sc @params -Confirm:$False
+Set-Content @params -Confirm:$False | Out-Null
 
 #Edit CustomSettings.ini
 $params = @{
@@ -332,31 +329,31 @@ $params = @{
     Value = $CustomSettingsIni
     Force = $True
 }
-sc @params -Confirm:$False
+Set-Content @params -Confirm:$False | Out-Null
 
 if ($DisableX86Support) {
-    Write-Log -Level INFO -Log "Disabling x86 Support"
+    Write-Log -Level Info -Log "Disabling x86 Support"
     $DeploymentShareSettings = "$DSDrive\DeploymentShare\Control\Settings.xml"
-    $xmlDoc = [XML](Get-Content $DeploymentShareSettings)
+    $xmldoc = [XML](Get-Content $DeploymentShareSettings)
     $xmldoc.Settings.SupportX86 = "False"
-    $xmlDoc.Save($DeploymentShareSettings)
+    $xmldoc.Save($DeploymentShareSettings)
 }
 
 #Create LiteTouch Boot WIM & ISO
-Write-Log -Level INFO -Log "Creating LiteTouch Boot Media"
-Update-MDTDeploymentShare -Path "DS001:" -Force -Verbose
+Write-Log -Level Info -Log "Creating LiteTouch Boot Media"
+Update-MDTDeploymentShare -Path "DS001:" -Force -Verbose | Out-Null
 
-#Download & Import Office 365 2016
+#download & Import Office 365 2016
 if ($IncludeApplications) {
-    Write-Log -Level INFO -Log "Extracting Office Deployment Toolkit"
+    Write-Log -Level Info -Log "Extracting Office Deployment Toolkit"
     $params = @{
         FilePath     = "$PSScriptRoot\odt\officedeploymenttool.exe"
         ArgumentList = "/quiet /extract:$PSScriptRoot\odt"
     }
-    start @params -Wait
-    Remove-Item "$PSScriptRoot\odt\officedeploymenttool.exe" -Force -Confirm:$false
-    sc -Path "$PSScriptRoot\odt\configuration.xml" -Value $Office365Configurationxml -Force -Confirm:$false
-    Write-Log -Level INFO -Log "Importing Office 365 into MDT"
+    Start-Process @params -Wait
+    Remove-Item "$PSScriptRoot\odt\officedeploymenttool.exe" -Force -Confirm:$false | Out-Null
+    Set-Content -Path "$PSScriptRoot\odt\configuration.xml" -Value $Office365Configurationxml -Force -Confirm:$false | Out-Null
+    Write-Log -Level Info -Log "Importing Office 365 into MDT"
     $params = @{
         Path                  = "DS001:\Applications"
         Name                  = "Microsoft Office 365 2016 Monthly"
@@ -371,53 +368,53 @@ if ($IncludeApplications) {
         ApplicationSourcePath = "$PSScriptRoot\odt" 
         DestinationFolder     = "Microsoft Office 365 2016 Monthly"
     }
-    Import-MDTApplication @params
+    Import-MDTApplication @params | Out-Null
 }
 
 if ($IncludeApplications) {
     foreach ($Application in $AppList) {
-        New-Item -Path "$PSScriptRoot\mdt_apps\$($application.name)" -ItemType Directory -Force
+        Write-Log -Level Info -Log "Downloading and importing $($Application.Name)"
+        New-Item -Path "$PSScriptRoot\mdt_apps\$($application.name)" -ItemType Directory -Force | Out-Null
         $params = @{
             Source      = $Application.download
             Destination = "$PSScriptRoot\mdt_apps\$($application.name)\$($Application.filename)"
         }
-        Try {
+        try {
             Download-File @params -ErrorAction Stop
             $params = @{
                 Path                  = "DS001:\Applications"
-                Name                  = $Application.name
-                ShortName             = $Application.name
+                Name                  = $Application.Name
+                ShortName             = $Application.Name
                 Publisher             = ""
                 Language              = ""
                 Enable                = "True"
                 Version               = $Application.version
-                Verbose               = $true
                 CommandLine           = $Application.install
                 WorkingDirectory      = ".\Applications\$($Application.name)"
                 ApplicationSourcePath = "$PSScriptRoot\mdt_apps\$($application.name)"
                 DestinationFolder     = $Application.name
             }
-            Import-MDTApplication @params
+            Import-MDTApplication @params | Out-Null
         }
-        Catch {
-            Write-Log -Level WARN -Log "Failed to download $($Application.name). Check URL is valid in applications.json. ($($_))"
+        catch {
+            Write-Log -Level Warn -Log "Failed to download $($Application.name). Check URL is valid in applications.json. ($($_))"
         }
     }
-    Remove-Item -Path "$PSScriptRoot\mdt_apps" -Recurse -Force -Confirm:$false
+    Remove-Item -Path "$PSScriptRoot\mdt_apps" -Recurse -Force -Confirm:$false | Out-Null
 }
 
 #Install WDS
-If ($InstallWDS) {
+if ($InstallWDS) {
     $OSInfo = Get-CimInstance -ClassName Win32_OperatingSystem
     if ($OSInfo.ProductType -eq 1) {
-        Write-Log -Level WARN -Log "Workstation OS - WDS Not available"
+        Write-Log -Level Warn -Log "Workstation OS - WDS Not available"
     }
     else {
-        Write-Log -Level INFO -Log "Server OS - Checking if WDS available on this version"
+        Write-Log -Level Info -Log "Server OS - Checking if WDS available on this version"
         $WDSCheck = Get-WindowsFeature -Name WDS
         if ($WDSCheck) {
-            Write-Log -Level INFO -Log "WDS Role Available - Installing"
-            Add-WindowsFeature -Name WDS -IncludeAllSubFeature -IncludeManagementTools
+            Write-Log -Level Info -Log "WDS Role Available - Installing"
+            Add-WindowsFeature -Name WDS -IncludeAllSubFeature -IncludeManagementTools | Out-Null
             $WDSInit = wdsutil /initialize-server /remInst:"$DSDrive\remInstall" /standalone
             $WDSConfig = wdsutil /Set-Server /AnswerClients:All
             $params = @{
@@ -426,14 +423,14 @@ If ($InstallWDS) {
                 NewImageName = "MDT Litetouch"
                 
             }
-            Import-WdsBootImage @params
+            Import-WdsBootImage @params | Out-Null
         }
         else {
-            Write-Log -Level WARN -Log "WDS Role not available on this version of Server"
+            Write-Log -Level Warn -Log "WDS Role not available on this version of Server"
         }
     }
 }
 
 #Finish
-Write-Log -Level INFO -Log "Script Finished"
+Write-Log -Level Info -Log "Script Finished"
 Pause
